@@ -271,3 +271,26 @@ small.code, code{
   white-space:pre-wrap;word-break:break-word;
   max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch;
 }
+
+.bulk-list{
+  display:flex;flex-direction:column;gap:8px;margin:14px 0;
+  max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+}
+.bulk-row{
+  display:grid;grid-template-columns:1fr 90px 60px;gap:8px;align-items:center;
+  padding:10px;border-radius:var(--radius-sm);
+  background:rgba(255,255,255,0.04);border:1px solid var(--glass-border);
+}
+.bulk-check{display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer;}
+.bulk-check input[type="checkbox"]{width:18px;height:18px;flex:0 0 auto;accent-color:var(--accent);}
+.bulk-check .payment-logo{width:30px;height:30px;font-size:14px;border-radius:8px;flex:0 0 30px;}
+.bulk-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bulk-amount, .bulk-day{
+  padding:8px;border-radius:8px;border:1px solid var(--glass-border);
+  background:rgba(255,255,255,0.05);color:var(--text);font-size:13px;width:100%;
+  -webkit-appearance:none;appearance:none;
+}
+@media (max-width:480px){
+  .bulk-row{grid-template-columns:1fr;}
+  .bulk-amount, .bulk-day{width:100%;}
+}
