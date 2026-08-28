@@ -4,7 +4,7 @@
    GitHub Pages (может отставать на несколько минут). Запись — только для
    админа, через GitHub Contents API с личным токеном в localStorage. */
 
-const BUILD_ID = '2026-08-28.10-bulk-53';
+const BUILD_ID = '2026-08-28.11-bulk-54';
 
 const LS_DATA = 'densel_data_cache';
 const LS_SESSION = 'densel_session';
@@ -518,10 +518,14 @@ function renderAdminPayments(){
   });
 }
 
-/* ---------- 5.1/5.2/5.3: bulk payments button + modal with provider checklist + suggested amounts ---------- */
+/* ---------- 5.1-5.4: bulk payments — button, checklist, suggested amounts, due date ---------- */
 function getLastAmountForProvider(providerId){
   const list = DATA.payments.filter(p=>p.providerId===providerId).sort((a,b)=> b.period.localeCompare(a.period));
   return list.length ? list[0].amountDue : '';
+}
+
+function defaultDueDateForPeriod(period){
+  return `${period}-25`;
 }
 
 function ensureBulkPaymentsButton(){
@@ -550,21 +554,30 @@ function openBulkPaymentsModal(){
     </label>
   `;
   }).join('');
+  const initialPeriod = currentPeriod();
   openModal(`
     <h3>Добавить платежи на месяц</h3>
     <form id="bulkPaymentsForm" class="settings-form">
-      <label class="field"><span>Период</span><input type="month" id="bulk_period" value="${currentPeriod()}" required></label>
+      <label class="field"><span>Период</span><input type="month" id="bulk_period" value="${initialPeriod}" required></label>
+      <label class="field"><span>Срок оплаты (для всех выбранных поставщиков)</span><input type="date" id="bulk_duedate" value="${defaultDueDateForPeriod(initialPeriod)}" required></label>
       <label class="field"><span>Поставщики и суммы</span></label>
       <div class="accounts-list">
         ${providerRows || '<p class="muted">Сначала добавьте хотя бы одного поставщика на вкладке «Поставщики»</p>'}
       </div>
-      <p class="muted small">Сумма подставлена по последнему платежу этого поставщика — можно изменить вручную. Сроки оплаты появятся на следующем шаге.</p>
+      <p class="muted small">Сумма подставлена по последнему платежу поставщика, срок оплаты — по умолчанию 25 число выбранного месяца. Оба значения можно изменить вручную.</p>
       <div class="modal-actions">
         <button type="button" class="btn ghost full" id="bulk_cancel">Отмена</button>
       </div>
     </form>
   `);
   on('#bulk_cancel', 'click', closeModal);
+  const periodEl = $('#bulk_period');
+  const dueEl = $('#bulk_duedate');
+  if(periodEl && dueEl){
+    periodEl.addEventListener('change', ()=>{
+      dueEl.value = defaultDueDateForPeriod(periodEl.value);
+    });
+  }
 }
 
 function renderAdminProviders(){
