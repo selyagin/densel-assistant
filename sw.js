@@ -1,4 +1,4 @@
-const CACHE = 'densel-assistant-v3';
+const CACHE = 'densel-assistant-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -24,14 +24,16 @@ self.addEventListener('activate', (e) => {
 });
 
 /*
-  Стратегия: "сеть первична, кэш — только запасной вариант при отсутствии сети".
-  Раньше здесь был cache-first, из-за которого обновления кода не доходили до
-  браузера, пока пользователь не очищал данные сайта вручную. теперь любой
-  успешный сетевой ответ сразу кладётся в кэш и отдаётся пользователю, а кэш
-  используется только если сеть недоступна (офлайн-режим).
+  Стратегия: "сеть первична, кэш — только запасной вариант при отсутствии сети",
+  и ТОЛЬКО для собственных файлов сайта (тот же origin). Запросы к внешним
+  доменам (api.github.com и т.п.) Service Worker вообще не трогает — их кэширование
+  не нужно и рисковано (могло привести к устаревшим ответам GitHub API).
 */
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+
+  const url = new URL(e.request.url);
+  if (url.origin !== self.location.origin) return; // не наш домен — не вмешиваемся
 
   e.respondWith(
     fetch(e.request, { cache: 'no-store' })
