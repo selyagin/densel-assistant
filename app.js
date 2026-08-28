@@ -4,7 +4,7 @@
    GitHub Pages (может отставать на несколько минут). Запись — только для
    админа, через GitHub Contents API с личным токеном в localStorage. */
 
-const BUILD_ID = '2026-08-28.8-bulk-51';
+const BUILD_ID = '2026-08-28.9-bulk-52';
 
 const LS_DATA = 'densel_data_cache';
 const LS_SESSION = 'densel_session';
@@ -518,7 +518,7 @@ function renderAdminPayments(){
   });
 }
 
-/* ---------- 5.1: bulk payments button + modal skeleton ---------- */
+/* ---------- 5.1/5.2: bulk payments button + modal with provider checklist ---------- */
 function ensureBulkPaymentsButton(){
   if($('#bulkPaymentsBtn')) return;
   const addBtn = $('#addPaymentBtn');
@@ -534,11 +534,22 @@ function ensureBulkPaymentsButton(){
 }
 
 function openBulkPaymentsModal(){
+  const providerRows = DATA.providers.map(pr => `
+    <label class="account-row" style="cursor:pointer;">
+      <input type="checkbox" class="bulk-provider-check" data-provider-id="${pr.id}" checked style="width:18px;height:18px;flex:0 0 auto;">
+      <div class="payment-logo" style="background:${pr.color}">${pr.logoUrl ? `<img src="${pr.logoUrl}">` : (pr.logo||pr.name[0])}</div>
+      <div class="payment-info"><h4>${pr.name}</h4></div>
+    </label>
+  `).join('');
   openModal(`
     <h3>Добавить платежи на месяц</h3>
     <form id="bulkPaymentsForm" class="settings-form">
       <label class="field"><span>Период</span><input type="month" id="bulk_period" value="${currentPeriod()}" required></label>
-      <p class="muted small">Список поставщиков для выбора появится на следующем шаге доработки.</p>
+      <label class="field"><span>Поставщики для добавления</span></label>
+      <div class="accounts-list">
+        ${providerRows || '<p class="muted">Сначала добавьте хотя бы одного поставщика на вкладке «Поставщики»</p>'}
+      </div>
+      <p class="muted small">Суммы и сроки оплаты для отмеченных поставщиков появятся на следующем шаге.</p>
       <div class="modal-actions">
         <button type="button" class="btn ghost full" id="bulk_cancel">Отмена</button>
       </div>
