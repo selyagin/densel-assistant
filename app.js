@@ -4,7 +4,7 @@
    GitHub Pages (может отставать на несколько минут). Запись — только для
    админа, через GitHub Contents API с личным токеном в localStorage. */
 
-const BUILD_ID = '2026-08-28.11-bulk-54';
+const BUILD_ID = '2026-08-28.12-bulk-55';
 
 const LS_DATA = 'densel_data_cache';
 const LS_SESSION = 'densel_session';
@@ -518,7 +518,7 @@ function renderAdminPayments(){
   });
 }
 
-/* ---------- 5.1-5.4: bulk payments — button, checklist, suggested amounts, due date ---------- */
+/* ---------- 5.1-5.5: bulk payments — button, checklist, suggested amounts, due date, real save ---------- */
 function getLastAmountForProvider(providerId){
   const list = DATA.payments.filter(p=>p.providerId===providerId).sort((a,b)=> b.period.localeCompare(a.period));
   return list.length ? list[0].amountDue : '';
@@ -564,9 +564,10 @@ function openBulkPaymentsModal(){
       <div class="accounts-list">
         ${providerRows || '<p class="muted">Сначала добавьте хотя бы одного поставщика на вкладке «Поставщики»</p>'}
       </div>
-      <p class="muted small">Сумма подставлена по последнему платежу поставщика, срок оплаты — по умолчанию 25 число выбранного месяца. Оба значения можно изменить вручную.</p>
+      <p id="bulk_hint" class="muted small">Сумма подставлена по последнему платежу поставщика, срок оплаты — по умолчанию 25 число выбранного месяца. Оба значения можно изменить вручную.</p>
       <div class="modal-actions">
         <button type="button" class="btn ghost full" id="bulk_cancel">Отмена</button>
+        <button type="submit" class="btn primary full" ${DATA.providers.length===0?'disabled':''}>Создать</button>
       </div>
     </form>
   `);
@@ -578,6 +579,51 @@ function openBulkPaymentsModal(){
       dueEl.value = defaultDueDateForPeriod(periodEl.value);
     });
   }
+  const form = $('#bulkPaymentsForm');
+  if(form) form.onsubmit = async (e)=>{
+    e.preventDefault();
+    const period = periodEl.value;
+    const dueDate = dueEl.value;
+    const checks = $all('.bulk-provider-check', form).filter(c=>c.checked);
+    if(checks.length === 0){
+      toast('Отметьте хотя бы одного поставщика');
+      return;
+    }
+    const alreadyExisting = [];
+    const toCreate = [];
+    checks.forEach(check=>{
+      const providerId = check.dataset.providerId;
+      const dup = DATA.payments.find(p=>p.providerId===providerId && p.period===period);
+      if(dup){
+        alreadyExisting.push(providerById(providerId).name);
+        return;
+      }
+      const amountInput = form.querySelector(`.bulk-amount-input[data-provider-id="${providerId}"]`);
+      const amountDue = amountInput ? (parseFloat(amountInput.value)||0) : 0;
+      toCreate.push({
+        id: 'p_' + Date.now() + '_' + providerId,
+        providerId,
+        period,
+        amountDue,
+        dueDate,
+        amountPaid: 0,
+        paidDate: null
+      });
+    });
+    if(toCreate.length === 0){
+      toast('Все отмеченные поставщики уже имеют платёж за этот период — ничего не создано');
+      return;
+    }
+    DATA.payments.push(...toCreate);
+    closeModal();
+    await saveData(`Densel Assistant: пакетное добавление ${toCreate.length} платеж(ей) за ${period}`);
+    renderAdminDashboard();
+    if(alreadyExisting.length){
+      toast(`Создано: ${toCreate.length}. Пропущено (уже есть платёж за период): ${alreadyExisting.join(', ')}`, 6000);
+    }else{
+      toast(`Создано платежей: ${toCreate.length} ✓`);
+    }
+  };
 }
 
 function renderAdminProviders(){
