@@ -17,7 +17,6 @@
   --shadow:0 20px 60px rgba(0,0,0,0.45);
 }
 
-
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
 html{
@@ -153,6 +152,10 @@ body{
 .summary-card .value.amber{color:var(--amber);}
 .summary-card .value.red{color:var(--red);}
 .summary-card .sub{font-size:12px;color:var(--muted);margin-top:4px;}
+.summary-card.advance-trigger{cursor:pointer;transition:transform .15s, background .2s;}
+.summary-card.advance-trigger:hover{background:rgba(255,255,255,0.09);}
+.summary-card.advance-trigger:active{transform:scale(0.97);}
+.summary-card.advance-trigger .value{font-size:16px;color:var(--accent2);}
 
 /* ---------- Payments list ---------- */
 .payments-list{display:flex;flex-direction:column;gap:10px;}
@@ -259,4 +262,14 @@ small.code, code{
   font-size:11px;line-height:1.5;color:#c9d1e0;
   white-space:pre-wrap;word-break:break-word;
   max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+}
+
+/* Приветствие сестры не должно обрезаться правилом .topbar-brand h2 —
+   оно задумано для длинного статичного заголовка админки, а не для
+   динамического текста "Здравствуйте, Имя". */
+#clientGreeting{
+  white-space:normal;
+  overflow:visible;
+  text-overflow:unset;
+  max-width:none;
 }
