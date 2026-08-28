@@ -21,56 +21,6 @@
       "passHash": "ad70ec52704eda88a625ea5fa11f9853d786e784c3fe45a65330d9da5a69ebdd"
     }
   ],
-  "providers": [
-    {
-      "id": "pr_zhkh",
-      "name": "ЖКХ",
-      "logo": "🏠",
-      "color": "#22d3ee",
-      "logoUrl": null
-    },
-    {
-      "id": "pr_internet",
-      "name": "Интернет",
-      "logo": "🌐",
-      "color": "#a78bfa",
-      "logoUrl": null
-    },
-    {
-      "id": "pr_kapremont",
-      "name": "Капремонт",
-      "logo": "🏗️",
-      "color": "#f59e0b",
-      "logoUrl": null
-    }
-  ],
-  "payments": [
-    {
-      "id": "p_seed_1",
-      "providerId": "pr_zhkh",
-      "period": "2026-07",
-      "amountDue": 3450,
-      "amountPaid": 3450,
-      "dueDate": "2026-07-25",
-      "paidDate": "2026-07-20"
-    },
-    {
-      "id": "p_seed_2",
-      "providerId": "pr_internet",
-      "period": "2026-07",
-      "amountDue": 700,
-      "amountPaid": 700,
-      "dueDate": "2026-07-20",
-      "paidDate": "2026-07-18"
-    },
-    {
-      "id": "p_seed_3",
-      "providerId": "pr_kapremont",
-      "period": "2026-07",
-      "amountDue": 520,
-      "amountPaid": 520,
-      "dueDate": "2026-07-25",
-      "paidDate": "2026-07-22"
-    }
-  ]
+  "providers": [],
+  "payments": []
 }
