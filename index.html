@@ -212,6 +212,21 @@
           <p id="pwMsg" class="hint-text"></p>
         </form>
       </section>
+
+      <section class="panel glass fade-up">
+        <h3>Диагностика для разработчика</h3>
+        <p class="muted small">
+          Если что-то не работает — нажмите «Собрать диагностику», затем «Скопировать всё»
+          и отправьте текст напрямую разработчику. Токен и пароли в отчёт не попадают.
+        </p>
+        <div class="modal-actions" style="margin-top:0;">
+          <button type="button" class="btn secondary full" id="collectDiagBtn">Собрать диагностику</button>
+        </div>
+        <pre id="diagOutput" class="diag-box" style="display:none;"></pre>
+        <button type="button" class="btn primary full" id="copyDiagBtn" style="display:none;margin-top:10px;">Скопировать всё</button>
+        <p id="diagMsg" class="hint-text"></p>
+      </section>
+
     </section>
 
   </main>
