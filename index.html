@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Densel Assistant</title>
 <meta name="description" content="Densel Assistant — ваш помощник в оплате услуг">
 <meta name="theme-color" content="#0b1020">
@@ -58,7 +58,10 @@
         <span class="muted">Densel Assistant</span>
       </div>
     </div>
-    <button class="btn ghost small" id="clientLogoutBtn">Выйти</button>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="clientSyncBtn" title="Обновить данные">🔄</button>
+      <button class="btn ghost small" id="clientLogoutBtn">Выйти</button>
+    </div>
   </header>
 
   <main class="content">
@@ -109,7 +112,10 @@
         <span class="muted" id="syncStatus">не синхронизировано</span>
       </div>
     </div>
-    <button class="btn ghost small" id="adminLogoutBtn">Выйти</button>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="adminSyncBtn" title="Обновить данные">🔄</button>
+      <button class="btn ghost small" id="adminLogoutBtn">Выйти</button>
+    </div>
   </header>
 
   <nav class="tabs glass">
@@ -187,6 +193,8 @@
           <button type="submit" class="btn primary full">Сохранить настройки</button>
           <p id="settingsMsg" class="hint-text"></p>
         </form>
+        <button type="button" class="btn secondary full" id="checkTokenBtn">Проверить токен</button>
+        <p id="tokenCheckResult" class="hint-text"></p>
       </section>
 
       <section class="panel glass fade-up">
