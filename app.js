@@ -4,6 +4,8 @@
    (только для админа) — через GitHub Contents API с личным токеном, который
    вводится в разделе "Настройки" и хранится ТОЛЬКО в localStorage устройства. */
 
+const BUILD_ID = '2026-08-28.3-diag';
+
 const LS_DATA = 'densel_data_cache';
 const LS_SESSION = 'densel_session';
 const LS_GH_SETTINGS = 'densel_gh_settings';
@@ -12,6 +14,17 @@ const LS_GH_TOKEN = 'densel_gh_token';
 let DATA = null;
 let SESSION = null; // {accountId, role, login}
 let CURRENT_TAB = 'overview';
+const ERROR_LOG = [];
+
+function logError(where, e){
+  ERROR_LOG.push({
+    where,
+    message: (e && e.message) || String(e),
+    stack: (e && e.stack) || '',
+    time: new Date().toISOString()
+  });
+  if(ERROR_LOG.length > 20) ERROR_LOG.shift();
+}
 
 /* ---------- Utils ---------- */
 function $(sel, root=document){ return root.querySelector(sel); }
@@ -140,7 +153,6 @@ async function saveData(commitMessage){
     let putRes = await attemptPut(sha);
 
     if(putRes.status === 409){
-      // конфликт версий (устаревший sha) — перечитываем актуальную версию и пробуем ещё раз один раз
       sha = await fetchCurrentSha();
       putRes = await attemptPut(sha);
     }
@@ -160,6 +172,7 @@ async function saveData(commitMessage){
   }catch(e){
     if(syncEl) syncEl.textContent = 'ошибка синхронизации';
     toast('Ошибка сохранения в GitHub: ' + e.message, 5000);
+    logError('saveData', e);
     return false;
   }
 }
@@ -215,6 +228,7 @@ async function checkGithubToken(){
   }catch(e){
     resultEl.textContent = '❌ Не удалось связаться с GitHub API: ' + e.message;
     resultEl.className = 'hint-text error-text';
+    logError('checkGithubToken', e);
   }
 }
 
@@ -230,6 +244,7 @@ async function forceSync(){
     toast(fresh ? 'Данные обновлены ✓' : 'Показаны сохраненные ранее данные (нет соединения)');
   }catch(e){
     toast('Не удалось обновить данные: ' + e.message, 4000);
+    logError('forceSync', e);
   }
 }
 
@@ -516,6 +531,152 @@ function loadSettingsForm(){
   if(resultEl){ resultEl.textContent = ''; resultEl.className = 'hint-text'; }
 }
 
+/* ---------- Diagnostics for developer support ---------- */
+async function collectDiagnosticsReport(){
+  const lines = [];
+  lines.push('=== Densel Assistant — техническая диагностика ===');
+  lines.push('Время отчёта: ' + new Date().toISOString());
+  lines.push('BUILD_ID: ' + BUILD_ID);
+  lines.push('User-Agent: ' + navigator.userAgent);
+  lines.push('Online: ' + navigator.onLine);
+  lines.push('URL: ' + location.href);
+  lines.push('');
+
+  lines.push('--- Сессия ---');
+  lines.push('Роль: ' + (SESSION ? SESSION.role : 'не авторизован'));
+  lines.push('Логин: ' + (SESSION ? SESSION.login : '—'));
+  lines.push('');
+
+  lines.push('--- Настройки GitHub (без токена) ---');
+  const gh = getGhSettings();
+  lines.push('owner: ' + (gh.owner || '(не задан)'));
+  lines.push('repo: ' + (gh.repo || '(не задан)'));
+  lines.push('branch: ' + (gh.branch || 'main'));
+  const tok = getGhToken();
+  lines.push('token: ' + (tok ? `задан (длина ${tok.length})` : 'не задан'));
+  lines.push('');
+
+  lines.push('--- Данные (DATA в памяти) ---');
+  if(DATA){
+    lines.push('accounts: ' + DATA.accounts.length);
+    lines.push('providers: ' + DATA.providers.length);
+    lines.push('payments: ' + DATA.payments.length);
+  }else{
+    lines.push('DATA не загружены');
+  }
+  lines.push('');
+
+  lines.push('--- Статус синхронизации (UI) ---');
+  const syncEl = $('#syncStatus');
+  lines.push('syncStatus текст: ' + (syncEl ? syncEl.textContent : '—'));
+  lines.push('');
+
+  lines.push('--- Живая проверка data.json на GitHub Pages ---');
+  try{
+    const res = await fetch('./data.json?diag=' + Date.now(), {cache:'no-store'});
+    lines.push('HTTP статус: ' + res.status);
+    if(res.ok){
+      const txt = await res.text();
+      lines.push('Размер ответа: ' + txt.length + ' символов');
+      try{
+        const parsed = JSON.parse(txt);
+        lines.push('payments в файле на сервере: ' + (parsed.payments ? parsed.payments.length : '—'));
+        lines.push('accounts в файле на сервере: ' + (parsed.accounts ? parsed.accounts.length : '—'));
+      }catch(e){ lines.push('Не удалось распарсить JSON: ' + e.message); }
+    }
+  }catch(e){
+    lines.push('Ошибка запроса: ' + e.message);
+  }
+  lines.push('');
+
+  lines.push('--- Service Worker ---');
+  if('serviceWorker' in navigator){
+    try{
+      const regs = await navigator.serviceWorker.getRegistrations();
+      lines.push('Регистраций: ' + regs.length);
+      regs.forEach((r,i)=>{
+        lines.push(`  [${i}] scope=${r.scope} active=${!!r.active} waiting=${!!r.waiting} installing=${!!r.installing}`);
+        if(r.active) lines.push(`      activeScriptURL=${r.active.scriptURL}`);
+      });
+    }catch(e){ lines.push('Ошибка чтения регистраций SW: ' + e.message); }
+
+    try{
+      const cacheNames = await caches.keys();
+      lines.push('Кэши (Cache Storage): ' + cacheNames.join(', '));
+      for(const name of cacheNames){
+        const cache = await caches.open(name);
+        const keys = await cache.keys();
+        lines.push(`  ${name}: ${keys.length} файлов — ` + keys.map(k=>new URL(k.url).pathname).join(', '));
+      }
+    }catch(e){ lines.push('Ошибка чтения Cache Storage: ' + e.message); }
+  }else{
+    lines.push('Service Worker не поддерживается браузером');
+  }
+  lines.push('');
+
+  lines.push('--- localStorage ключи (без значений паролей/токена) ---');
+  Object.keys(localStorage).filter(k=>k.startsWith('densel_')).forEach(k=>{
+    if(k === LS_GH_TOKEN){ lines.push(k + ': [скрыто]'); return; }
+    const v = localStorage.getItem(k);
+    lines.push(k + ': ' + (v && v.length > 200 ? v.slice(0,200) + '…(обрезано)' : v));
+  });
+  lines.push('');
+
+  lines.push('--- Последние ошибки (максимум 20) ---');
+  if(ERROR_LOG.length === 0){
+    lines.push('Ошибок не зафиксировано в этой сессии.');
+  }else{
+    ERROR_LOG.forEach((e,i)=>{
+      lines.push(`[${i}] ${e.time} — ${e.where}: ${e.message}`);
+    });
+  }
+
+  return lines.join('\n');
+}
+
+async function runDiagnostics(){
+  const out = $('#diagOutput');
+  const copyBtn = $('#copyDiagBtn');
+  const msg = $('#diagMsg');
+  out.style.display = 'block';
+  out.textContent = 'Собираю данные…';
+  msg.textContent = '';
+  try{
+    const report = await collectDiagnosticsReport();
+    out.textContent = report;
+    copyBtn.style.display = 'block';
+  }catch(e){
+    out.textContent = 'Ошибка сбора диагностики: ' + e.message;
+    logError('runDiagnostics', e);
+  }
+}
+
+async function copyDiagnostics(){
+  const out = $('#diagOutput');
+  const msg = $('#diagMsg');
+  const text = out.textContent || '';
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+    }else{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    msg.textContent = 'Скопировано в буфер обмена ✓';
+    toast('Диагностика скопирована');
+  }catch(e){
+    msg.textContent = 'Не удалось скопировать автоматически — выделите текст вручную.';
+    logError('copyDiagnostics', e);
+  }
+}
+
+
 /* ---------- Modals ---------- */
 function openModal(html){
   $('#modalBox').innerHTML = html;
@@ -683,6 +844,10 @@ $('#addAccountBtn').addEventListener('click', ()=>openAccountModal());
 /* ---------- Manual sync buttons ---------- */
 $('#clientSyncBtn').addEventListener('click', forceSync);
 $('#adminSyncBtn').addEventListener('click', forceSync);
+
+/* ---------- Diagnostics ---------- */
+$('#collectDiagBtn').addEventListener('click', runDiagnostics);
+$('#copyDiagBtn').addEventListener('click', copyDiagnostics);
 
 /* ---------- Auth ---------- */
 function showScreen(id){
