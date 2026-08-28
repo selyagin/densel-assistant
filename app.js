@@ -6,7 +6,7 @@
    GitHub Contents API с личным токеном, который хранится ТОЛЬКО в
    localStorage этого устройства. */
 
-const BUILD_ID = '2026-08-28.7-bulk-add';
+const BUILD_ID = '2026-08-28.7-safe-listeners';
 
 const LS_DATA = 'densel_data_cache';
 const LS_SESSION = 'densel_session';
@@ -14,26 +14,26 @@ const LS_GH_SETTINGS = 'densel_gh_settings';
 const LS_GH_TOKEN = 'densel_gh_token';
 
 let DATA = null;
-let SESSION = null; // {accountId, role, login}
+let SESSION = null;
 let CURRENT_TAB = 'overview';
 const ERROR_LOG = [];
 
 function logError(where, e){
-  ERROR_LOG.push({
-    where,
-    message: (e && e.message) || String(e),
-    stack: (e && e.stack) || '',
-    time: new Date().toISOString()
-  });
+  ERROR_LOG.push({ where, message: (e && e.message) || String(e), stack: (e && e.stack) || '', time: new Date().toISOString() });
   if(ERROR_LOG.length > 20) ERROR_LOG.shift();
 }
 
-/* ---------- Utils ---------- */
 function $(sel, root=document){ return root.querySelector(sel); }
 function $all(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
+function on(sel, event, handler){
+  const el = $(sel);
+  if(el){ el.addEventListener(event, handler); }
+  else { logError('on()', new Error('элемент не найден: ' + sel)); }
+}
 
 function toast(msg, ms=3200){
   const el = $('#toast');
+  if(!el) return;
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(el._t);
@@ -91,7 +91,6 @@ function last12Periods(n){
   return out;
 }
 
-/* ---------- Data load / save ---------- */
 async function fetchDataViaApi(){
   const {owner, repo, branch} = getGhSettings();
   const token = getGhToken();
@@ -186,12 +185,10 @@ async function saveData(commitMessage){
     if(syncEl) syncEl.textContent = 'сохранение…';
     let sha = await fetchCurrentSha();
     let putRes = await attemptPut(sha);
-
     if(putRes.status === 409){
       sha = await fetchCurrentSha();
       putRes = await attemptPut(sha);
     }
-
     if(!putRes.ok){
       const err = await putRes.json().catch(()=>({}));
       if(putRes.status === 401) throw new Error('токен неверен или просрочен (401)');
@@ -267,7 +264,6 @@ async function checkGithubToken(){
   }
 }
 
-/* ---------- Force sync (manual refresh) ---------- */
 async function forceSync(){
   toast('Обновляем данные…', 1500);
   try{
@@ -284,7 +280,6 @@ async function forceSync(){
   }
 }
 
-/* ---------- Status logic ---------- */
 function getPaymentStatus(p){
   const today = new Date(); today.setHours(0,0,0,0);
   const due = p.dueDate ? new Date(p.dueDate) : null;
@@ -325,7 +320,6 @@ function computeAdvanceStreaks(){
 
 function providerById(id){ return DATA.providers.find(p=>p.id===id); }
 
-/* ---------- Rendering: shared payment row ---------- */
 function paymentRowHtml(p, editable){
   const provider = providerById(p.providerId) || {name:'Неизвестно', color:'#888', logo:'?'};
   const status = getPaymentStatus(p);
@@ -358,7 +352,6 @@ function paymentRowHtml(p, editable){
     </div>`;
 }
 
-/* ---------- Summary cards ---------- */
 function buildSummary(paymentsScope){
   const cur = currentPeriod();
   const curPayments = paymentsScope.filter(p=>p.period===cur);
@@ -400,8 +393,7 @@ function wireSummaryButtons(containerEl, paymentsScope){
   const advBtn = containerEl.querySelector('[data-summary-action="advance"]');
   if(advBtn){
     advBtn.onclick = ()=>{
-      const list = paymentsScope.filter(p=>getPaymentStatus(p)==='advance')
-        .sort((a,b)=> a.period.localeCompare(b.period));
+      const list = paymentsScope.filter(p=>getPaymentStatus(p)==='advance').sort((a,b)=> a.period.localeCompare(b.period));
       showPaymentsListModal('Оплачено заранее', list);
     };
   }
@@ -415,18 +407,14 @@ function showPaymentsListModal(title, list){
     </div>
     <div class="modal-actions"><button type="button" class="btn ghost full" id="summaryModalClose">Закрыть</button></div>
   `);
-  $('#summaryModalClose').onclick = closeModal;
+  on('#summaryModalClose', 'click', closeModal);
 }
 
-/* ---------- Charts (pure SVG, no dependencies) ---------- */
 function renderTrendChart(svgEl, periods){
   const W=320,H=160,pad={l:8,r:8,t:14,b:20};
   const totals = periods.map(per=>{
     const items = DATA.payments.filter(p=>p.period===per);
-    return {
-      due: items.reduce((s,p)=>s+p.amountDue,0),
-      paid: items.reduce((s,p)=>s+(p.amountPaid||0),0)
-    };
+    return { due: items.reduce((s,p)=>s+p.amountDue,0), paid: items.reduce((s,p)=>s+(p.amountPaid||0),0) };
   });
   const max = Math.max(1, ...totals.map(t=>t.due), ...totals.map(t=>t.paid));
   const stepX = (W-pad.l-pad.r) / Math.max(1, periods.length-1);
@@ -473,43 +461,44 @@ function renderDonutChart(svgEl, legendEl){
   }).join('') || '<div>Нет оплат за этот год</div>';
 }
 
-/* ---------- Client dashboard ---------- */
 function renderClientDashboard(){
   const account = DATA.accounts.find(a=>a.id===SESSION.accountId);
-  $('#clientGreeting').textContent = `Здравствуйте, ${account.name || account.login}`;
+  const greetEl = $('#clientGreeting');
+  if(greetEl) greetEl.textContent = `Здравствуйте, ${account.name || account.login}`;
 
   const payments = DATA.payments.slice().sort((a,b)=> b.period.localeCompare(a.period));
   const clientSummaryEl = $('#clientSummary');
-  clientSummaryEl.innerHTML = buildSummary(payments);
-  wireSummaryButtons(clientSummaryEl, payments);
+  if(clientSummaryEl){
+    clientSummaryEl.innerHTML = buildSummary(payments);
+    wireSummaryButtons(clientSummaryEl, payments);
+  }
 
   const periods = Array.from(new Set(payments.map(p=>p.period))).sort().reverse();
   const filterEl = $('#periodFilter');
-  filterEl.innerHTML = `<option value="all">Все периоды</option>` +
-    periods.map(p=>`<option value="${p}">${periodLabel(p)}</option>`).join('');
-  filterEl.value = periods.includes(currentPeriod()) ? currentPeriod() : 'all';
+  if(filterEl){
+    filterEl.innerHTML = `<option value="all">Все периоды</option>` + periods.map(p=>`<option value="${p}">${periodLabel(p)}</option>`).join('');
+    filterEl.value = periods.includes(currentPeriod()) ? currentPeriod() : 'all';
+  }
 
   function renderList(){
-    const val = filterEl.value;
+    const val = filterEl ? filterEl.value : 'all';
     const list = val==='all' ? payments : payments.filter(p=>p.period===val);
-    $('#paymentsList').innerHTML = list.length
-      ? list.map(p=>paymentRowHtml(p,false)).join('')
-      : '<p class="muted">Нет платежей за выбранный период</p>';
+    const listEl = $('#paymentsList');
+    if(listEl) listEl.innerHTML = list.length ? list.map(p=>paymentRowHtml(p,false)).join('') : '<p class="muted">Нет платежей за выбранный период</p>';
   }
-  filterEl.onchange = renderList;
+  if(filterEl) filterEl.onchange = renderList;
   renderList();
 
   const rangeSel = $('#statsRange');
   function renderCharts(){
-    const periods12 = last12Periods(parseInt(rangeSel.value,10));
-    renderTrendChart($('#trendChart'), periods12);
-    renderDonutChart($('#donutChart'), $('#donutLegend'));
+    const periods12 = last12Periods(parseInt(rangeSel ? rangeSel.value : '12',10));
+    const trendEl = $('#trendChart'); if(trendEl) renderTrendChart(trendEl, periods12);
+    const donutEl = $('#donutChart'); if(donutEl) renderDonutChart(donutEl, $('#donutLegend'));
   }
-  rangeSel.onchange = renderCharts;
+  if(rangeSel) rangeSel.onchange = renderCharts;
   renderCharts();
 }
 
-/* ---------- Admin dashboard ---------- */
 function renderAdminDashboard(){
   renderAdminOverview();
   renderAdminPayments();
@@ -522,23 +511,23 @@ function renderAdminDashboard(){
 function renderAdminOverview(){
   const payments = DATA.payments;
   const adminSummaryEl = $('#adminSummary');
-  adminSummaryEl.innerHTML = buildSummary(payments);
-  wireSummaryButtons(adminSummaryEl, payments);
+  if(adminSummaryEl){
+    adminSummaryEl.innerHTML = buildSummary(payments);
+    wireSummaryButtons(adminSummaryEl, payments);
+  }
   const upcoming = payments
     .filter(p=>getPaymentStatus(p)!=='paid' && getPaymentStatus(p)!=='advance')
     .sort((a,b)=> new Date(a.dueDate) - new Date(b.dueDate))
     .slice(0,6);
-  $('#upcomingList').innerHTML = upcoming.length
-    ? upcoming.map(p=>paymentRowHtml(p,false)).join('')
-    : '<p class="muted">Нет активных начислений</p>';
+  const upcomingEl = $('#upcomingList');
+  if(upcomingEl) upcomingEl.innerHTML = upcoming.length ? upcoming.map(p=>paymentRowHtml(p,false)).join('') : '<p class="muted">Нет активных начислений</p>';
 }
 
 function renderAdminPayments(){
   const list = DATA.payments.slice().sort((a,b)=> b.period.localeCompare(a.period));
   const el = $('#adminPaymentsList');
-  el.innerHTML = list.length
-    ? list.map(p=>paymentRowHtml(p,true)).join('')
-    : '<p class="muted">Платежей пока нет — добавьте первый.</p>';
+  if(!el) return;
+  el.innerHTML = list.length ? list.map(p=>paymentRowHtml(p,true)).join('') : '<p class="muted">Платежей пока нет — добавьте первый.</p>';
   $all('.icon-btn[data-action="edit"]', el).forEach(btn=>{
     btn.onclick = ()=> openPaymentModal(DATA.payments.find(p=>p.id===btn.dataset.id));
   });
@@ -554,6 +543,7 @@ function renderAdminPayments(){
 
 function renderAdminProviders(){
   const el = $('#providersList');
+  if(!el) return;
   el.innerHTML = DATA.providers.map(pr=>`
     <div class="provider-row">
       <div class="payment-logo" style="background:${pr.color}">${pr.logoUrl ? `<img src="${pr.logoUrl}">` : (pr.logo||pr.name[0])}</div>
@@ -580,6 +570,7 @@ function renderAdminProviders(){
 
 function renderAdminAccounts(){
   const el = $('#accountsList');
+  if(!el) return;
   el.innerHTML = DATA.accounts.map(a=>`
     <div class="account-row">
       <div class="payment-logo" style="background:${a.role==='admin'?'#a78bfa':'#22d3ee'}">${(a.name||a.login)[0].toUpperCase()}</div>
@@ -605,20 +596,19 @@ function renderAdminAccounts(){
 
 function populatePasswordAccountSelect(){
   const sel = $('#pwAccountSelect');
-  sel.innerHTML = DATA.accounts.map(a=>`<option value="${a.id}">${a.name||a.login} (${a.login})</option>`).join('');
+  if(sel) sel.innerHTML = DATA.accounts.map(a=>`<option value="${a.id}">${a.name||a.login} (${a.login})</option>`).join('');
 }
 
 function loadSettingsForm(){
   const s = getGhSettings();
-  $('#ghOwner').value = s.owner || '';
-  $('#ghRepo').value = s.repo || '';
-  $('#ghBranch').value = s.branch || 'main';
-  $('#ghToken').value = getGhToken();
+  const owEl=$('#ghOwner'); if(owEl) owEl.value = s.owner || '';
+  const repEl=$('#ghRepo'); if(repEl) repEl.value = s.repo || '';
+  const brEl=$('#ghBranch'); if(brEl) brEl.value = s.branch || 'main';
+  const tokEl=$('#ghToken'); if(tokEl) tokEl.value = getGhToken();
   const resultEl = $('#tokenCheckResult');
   if(resultEl){ resultEl.textContent = ''; resultEl.className = 'hint-text'; }
 }
 
-/* ---------- Diagnostics for developer support ---------- */
 async function collectDiagnosticsReport(){
   const lines = [];
   lines.push('=== Densel Assistant — техническая диагностика ===');
@@ -628,12 +618,10 @@ async function collectDiagnosticsReport(){
   lines.push('Online: ' + navigator.onLine);
   lines.push('URL: ' + location.href);
   lines.push('');
-
   lines.push('--- Сессия ---');
   lines.push('Роль: ' + (SESSION ? SESSION.role : 'не авторизован'));
   lines.push('Логин: ' + (SESSION ? SESSION.login : '—'));
   lines.push('');
-
   lines.push('--- Настройки GitHub (без токена) ---');
   const gh = getGhSettings();
   lines.push('owner: ' + (gh.owner || '(не задан)'));
@@ -642,7 +630,6 @@ async function collectDiagnosticsReport(){
   const tok = getGhToken();
   lines.push('token: ' + (tok ? `задан (длина ${tok.length})` : 'не задан'));
   lines.push('');
-
   lines.push('--- Данные (DATA в памяти) ---');
   if(DATA){
     lines.push('accounts: ' + DATA.accounts.length);
@@ -652,12 +639,10 @@ async function collectDiagnosticsReport(){
     lines.push('DATA не загружены');
   }
   lines.push('');
-
   lines.push('--- Статус синхронизации (UI) ---');
   const syncEl = $('#syncStatus');
   lines.push('syncStatus текст: ' + (syncEl ? syncEl.textContent : '—'));
   lines.push('');
-
   lines.push('--- Живая проверка через api.github.com (без CDN) ---');
   try{
     const apiData = await fetchDataViaApi();
@@ -671,7 +656,6 @@ async function collectDiagnosticsReport(){
     lines.push('Ошибка запроса к api.github.com: ' + e.message);
   }
   lines.push('');
-
   lines.push('--- Живая проверка data.json на GitHub Pages (через CDN, может отставать) ---');
   try{
     const res = await fetch('./data.json?diag=' + Date.now(), {cache:'no-store'});
@@ -689,7 +673,6 @@ async function collectDiagnosticsReport(){
     lines.push('Ошибка запроса: ' + e.message);
   }
   lines.push('');
-
   lines.push('--- Service Worker ---');
   if('serviceWorker' in navigator){
     try{
@@ -700,7 +683,6 @@ async function collectDiagnosticsReport(){
         if(r.active) lines.push(`      activeScriptURL=${r.active.scriptURL}`);
       });
     }catch(e){ lines.push('Ошибка чтения регистраций SW: ' + e.message); }
-
     try{
       const cacheNames = await caches.keys();
       lines.push('Кэши (Cache Storage): ' + cacheNames.join(', '));
@@ -715,7 +697,6 @@ async function collectDiagnosticsReport(){
     lines.push('Service Worker не поддерживается браузером');
   }
   lines.push('');
-
   lines.push('--- localStorage ключи (без значений паролей/токена) ---');
   Object.keys(localStorage).filter(k=>k.startsWith('densel_')).forEach(k=>{
     if(k === LS_GH_TOKEN){ lines.push(k + ': [скрыто]'); return; }
@@ -723,16 +704,12 @@ async function collectDiagnosticsReport(){
     lines.push(k + ': ' + (v && v.length > 200 ? v.slice(0,200) + '…(обрезано)' : v));
   });
   lines.push('');
-
   lines.push('--- Последние ошибки (максимум 20) ---');
   if(ERROR_LOG.length === 0){
     lines.push('Ошибок не зафиксировано в этой сессии.');
   }else{
-    ERROR_LOG.forEach((e,i)=>{
-      lines.push(`[${i}] ${e.time} — ${e.where}: ${e.message}`);
-    });
+    ERROR_LOG.forEach((e,i)=>{ lines.push(`[${i}] ${e.time} — ${e.where}: ${e.message}`); });
   }
-
   return lines.join('\n');
 }
 
@@ -740,13 +717,14 @@ async function runDiagnostics(){
   const out = $('#diagOutput');
   const copyBtn = $('#copyDiagBtn');
   const msg = $('#diagMsg');
+  if(!out) return;
   out.style.display = 'block';
   out.textContent = 'Собираю данные…';
-  msg.textContent = '';
+  if(msg) msg.textContent = '';
   try{
     const report = await collectDiagnosticsReport();
     out.textContent = report;
-    copyBtn.style.display = 'block';
+    if(copyBtn) copyBtn.style.display = 'block';
   }catch(e){
     out.textContent = 'Ошибка сбора диагностики: ' + e.message;
     logError('runDiagnostics', e);
@@ -756,7 +734,7 @@ async function runDiagnostics(){
 async function copyDiagnostics(){
   const out = $('#diagOutput');
   const msg = $('#diagMsg');
-  const text = out.textContent || '';
+  const text = out ? (out.textContent || '') : '';
   try{
     if(navigator.clipboard && navigator.clipboard.writeText){
       await navigator.clipboard.writeText(text);
@@ -770,22 +748,20 @@ async function copyDiagnostics(){
       document.execCommand('copy');
       document.body.removeChild(ta);
     }
-    msg.textContent = 'Скопировано в буфер обмена ✓';
+    if(msg) msg.textContent = 'Скопировано в буфер обмена ✓';
     toast('Диагностика скопирована');
   }catch(e){
-    msg.textContent = 'Не удалось скопировать автоматически — выделите текст вручную.';
+    if(msg) msg.textContent = 'Не удалось скопировать автоматически — выделите текст вручную.';
     logError('copyDiagnostics', e);
   }
 }
 
-
-/* ---------- Modals ---------- */
 function openModal(html){
-  $('#modalBox').innerHTML = html;
-  $('#modalOverlay').classList.add('active');
+  const box = $('#modalBox'); if(box) box.innerHTML = html;
+  const ov = $('#modalOverlay'); if(ov) ov.classList.add('active');
 }
-function closeModal(){ $('#modalOverlay').classList.remove('active'); }
-$('#modalOverlay').addEventListener('click', e=>{ if(e.target.id==='modalOverlay') closeModal(); });
+function closeModal(){ const ov = $('#modalOverlay'); if(ov) ov.classList.remove('active'); }
+on('#modalOverlay', 'click', e=>{ if(e.target.id==='modalOverlay') closeModal(); });
 
 function openPaymentModal(existing){
   const isEdit = !!existing;
@@ -805,8 +781,9 @@ function openPaymentModal(existing){
       </div>
     </form>
   `);
-  $('#pf_cancel').onclick = closeModal;
-  $('#paymentForm').onsubmit = async (e)=>{
+  on('#pf_cancel', 'click', closeModal);
+  const form = $('#paymentForm');
+  if(form) form.onsubmit = async (e)=>{
     e.preventDefault();
     const rec = {
       id: existing ? existing.id : 'p_' + Date.now(),
@@ -843,8 +820,9 @@ function openProviderModal(existing){
       </div>
     </form>
   `);
-  $('#pr_cancel').onclick = closeModal;
-  $('#providerForm').onsubmit = async (e)=>{
+  on('#pr_cancel', 'click', closeModal);
+  const form = $('#providerForm');
+  if(form) form.onsubmit = async (e)=>{
     e.preventDefault();
     const rec = {
       id: existing ? existing.id : 'pr_' + Date.now(),
@@ -884,8 +862,9 @@ function openAccountModal(){
       </div>
     </form>
   `);
-  $('#ac_cancel').onclick = closeModal;
-  $('#accountForm').onsubmit = async (e)=>{
+  on('#ac_cancel', 'click', closeModal);
+  const form = $('#accountForm');
+  if(form) form.onsubmit = async (e)=>{
     e.preventDefault();
     const login = $('#ac_login').value.trim();
     if(DATA.accounts.some(a=>a.login.toLowerCase()===login.toLowerCase())){
@@ -893,79 +872,14 @@ function openAccountModal(){
     }
     const salt = randomSalt();
     const passHash = await sha256Hex(salt + $('#ac_pass').value);
-    DATA.accounts.push({
-      id:'acc_'+Date.now(), role:$('#ac_role').value, login, name:$('#ac_name').value.trim(), salt, passHash
-    });
+    DATA.accounts.push({ id:'acc_'+Date.now(), role:$('#ac_role').value, login, name:$('#ac_name').value.trim(), salt, passHash });
     closeModal();
     await saveData('Новая учётная запись');
     renderAdminDashboard();
   };
 }
 
-/* ---------- Bulk add payments for a month ---------- */
-function openBulkAddModal(){
-  const suggestedPeriod = addMonths(currentPeriod(), 1);
-  const rows = DATA.providers.map(pr=>{
-    const history = DATA.payments.filter(p=>p.providerId===pr.id).sort((a,b)=>b.period.localeCompare(a.period));
-    const last = history[0];
-    const suggestedAmount = last ? last.amountDue : '';
-    const suggestedDay = last && last.dueDate ? new Date(last.dueDate).getDate() : 25;
-    return {pr, suggestedAmount, suggestedDay};
-  });
-  openModal(`
-    <h3>Добавить оплаты на месяц</h3>
-    <form id="bulkForm" class="settings-form">
-      <label class="field"><span>Период</span><input type="month" id="bulk_period" value="${suggestedPeriod}" required></label>
-      <p class="muted small" style="margin:0;">Сумма подставлена по последнему известному платежу — при необходимости измените. Уберите галочку у поставщика, если платёж за этот месяц не нужен.</p>
-      <div class="bulk-list">
-        ${rows.map(r=>`
-          <label class="bulk-row">
-            <input type="checkbox" class="bulk-check" data-provider="${r.pr.id}" checked>
-            <span class="payment-logo bulk-logo" style="background:${r.pr.color}">${r.pr.logoUrl?`<img src="${r.pr.logoUrl}">`:(r.pr.logo||r.pr.name[0])}</span>
-            <span class="bulk-name">${r.pr.name}</span>
-            <input type="number" step="0.01" class="bulk-amount" data-provider="${r.pr.id}" value="${r.suggestedAmount}" placeholder="Сумма">
-            <input type="number" min="1" max="28" class="bulk-day" data-provider="${r.pr.id}" value="${r.suggestedDay}" title="День срока оплаты">
-          </label>
-        `).join('')}
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn ghost full" id="bulk_cancel">Отмена</button>
-        <button type="submit" class="btn primary full">Добавить выбранные</button>
-      </div>
-    </form>
-  `);
-  $('#bulk_cancel').onclick = closeModal;
-  $('#bulkForm').onsubmit = async (e)=>{
-    e.preventDefault();
-    const period = $('#bulk_period').value;
-    const checks = $all('.bulk-check').filter(c=>c.checked);
-    if(checks.length===0){ toast('Выберите хотя бы одного поставщика'); return; }
-    let added = 0, skipped = 0;
-    checks.forEach(chk=>{
-      const providerId = chk.dataset.provider;
-      const exists = DATA.payments.some(p=>p.providerId===providerId && p.period===period);
-      if(exists){ skipped++; return; }
-      const amountInput = document.querySelector(`.bulk-amount[data-provider="${providerId}"]`);
-      const dayInput = document.querySelector(`.bulk-day[data-provider="${providerId}"]`);
-      const amount = parseFloat(amountInput.value) || 0;
-      const day = Math.min(28, Math.max(1, parseInt(dayInput.value,10) || 25));
-      const [y,m] = period.split('-').map(Number);
-      const dueDate = `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-      DATA.payments.push({
-        id: 'p_' + Date.now() + '_' + providerId,
-        providerId, period, amountDue: amount, dueDate, amountPaid: 0, paidDate: null
-      });
-      added++;
-    });
-    closeModal();
-    if(added>0) await saveData(`Пакетное добавление платежей за ${periodLabel(period)}`);
-    renderAdminDashboard();
-    toast(`Добавлено платежей: ${added}` + (skipped ? `, пропущено (уже есть за этот период): ${skipped}` : ''));
-  };
-}
-
-/* ---------- Settings & password forms ---------- */
-$('#settingsForm').addEventListener('submit', async (e)=>{
+on('#settingsForm', 'submit', async (e)=>{
   e.preventDefault();
   const settings = {owner:$('#ghOwner').value.trim(), repo:$('#ghRepo').value.trim(), branch:$('#ghBranch').value.trim()||'main'};
   localStorage.setItem(LS_GH_SETTINGS, JSON.stringify(settings));
@@ -974,9 +888,9 @@ $('#settingsForm').addEventListener('submit', async (e)=>{
   toast('Настройки GitHub сохранены');
 });
 
-$('#checkTokenBtn').addEventListener('click', checkGithubToken);
+on('#checkTokenBtn', 'click', checkGithubToken);
 
-$('#passwordForm').addEventListener('submit', async (e)=>{
+on('#passwordForm', 'submit', async (e)=>{
   e.preventDefault();
   const accId = $('#pwAccountSelect').value;
   const acc = DATA.accounts.find(a=>a.id===accId);
@@ -990,46 +904,42 @@ $('#passwordForm').addEventListener('submit', async (e)=>{
   toast('Пароль изменён');
 });
 
-/* ---------- Tabs ---------- */
 $all('.tab').forEach(tab=>{
   tab.addEventListener('click', ()=>{
     $all('.tab').forEach(t=>t.classList.remove('active'));
     tab.classList.add('active');
     $all('.tab-panel').forEach(p=>p.classList.remove('active'));
-    $('#tab-'+tab.dataset.tab).classList.add('active');
+    const panel = $('#tab-'+tab.dataset.tab); if(panel) panel.classList.add('active');
     CURRENT_TAB = tab.dataset.tab;
   });
 });
 
-$('#addPaymentBtn').addEventListener('click', ()=>openPaymentModal(null));
-$('#bulkAddBtn').addEventListener('click', ()=>openBulkAddModal());
-$('#addProviderBtn').addEventListener('click', ()=>openProviderModal(null));
-$('#addAccountBtn').addEventListener('click', ()=>openAccountModal());
+on('#addPaymentBtn', 'click', ()=>openPaymentModal(null));
+on('#addProviderBtn', 'click', ()=>openProviderModal(null));
+on('#addAccountBtn', 'click', ()=>openAccountModal());
 
-/* ---------- Manual sync buttons ---------- */
-$('#clientSyncBtn').addEventListener('click', forceSync);
-$('#adminSyncBtn').addEventListener('click', forceSync);
+on('#clientSyncBtn', 'click', forceSync);
+on('#adminSyncBtn', 'click', forceSync);
 
-/* ---------- Diagnostics ---------- */
-$('#collectDiagBtn').addEventListener('click', runDiagnostics);
-$('#copyDiagBtn').addEventListener('click', copyDiagnostics);
+on('#collectDiagBtn', 'click', runDiagnostics);
+on('#copyDiagBtn', 'click', copyDiagnostics);
 
-/* ---------- Auth ---------- */
 function showScreen(id){
   $all('.screen').forEach(s=>s.classList.remove('active'));
-  $('#'+id).classList.add('active');
+  const el = $('#'+id); if(el) el.classList.add('active');
 }
 
-$('#loginForm').addEventListener('submit', async (e)=>{
+on('#loginForm', 'submit', async (e)=>{
   e.preventDefault();
   const login = $('#loginInput').value.trim();
   const password = $('#passwordInput').value;
-  const account = DATA.accounts.find(a=>a.login.toLowerCase()===login.toLowerCase());
+  const account = DATA && DATA.accounts ? DATA.accounts.find(a=>a.login.toLowerCase()===login.toLowerCase()) : null;
   const errEl = $('#loginError');
-  if(!account){ errEl.textContent = 'Неверный логин или пароль'; return; }
+  if(!DATA){ if(errEl) errEl.textContent = 'Данные ещё не загружены, подождите секунду и повторите'; return; }
+  if(!account){ if(errEl) errEl.textContent = 'Неверный логин или пароль'; return; }
   const hash = await sha256Hex(account.salt + password);
-  if(hash !== account.passHash){ errEl.textContent = 'Неверный логин или пароль'; return; }
-  errEl.textContent = '';
+  if(hash !== account.passHash){ if(errEl) errEl.textContent = 'Неверный логин или пароль'; return; }
+  if(errEl) errEl.textContent = '';
   SESSION = {accountId: account.id, role: account.role, login: account.login};
   localStorage.setItem(LS_SESSION, JSON.stringify(SESSION));
   enterApp();
@@ -1038,11 +948,12 @@ $('#loginForm').addEventListener('submit', async (e)=>{
 function logout(){
   SESSION = null;
   localStorage.removeItem(LS_SESSION);
-  $('#loginInput').value=''; $('#passwordInput').value='';
+  const li=$('#loginInput'); if(li) li.value='';
+  const pi=$('#passwordInput'); if(pi) pi.value='';
   showScreen('loginScreen');
 }
-$('#clientLogoutBtn').addEventListener('click', logout);
-$('#adminLogoutBtn').addEventListener('click', logout);
+on('#clientLogoutBtn', 'click', logout);
+on('#adminLogoutBtn', 'click', logout);
 
 function enterApp(){
   if(SESSION.role === 'admin'){
@@ -1054,15 +965,19 @@ function enterApp(){
   }
 }
 
-/* ---------- Boot ---------- */
 async function boot(){
   const savedSessionRaw = localStorage.getItem(LS_SESSION);
   let preSessionRole = null;
   if(savedSessionRaw){
     try{ preSessionRole = JSON.parse(savedSessionRaw).role; }catch(e){}
   }
-  await loadData(true, preSessionRole === 'admin');
-  if(savedSessionRaw){
+  try{
+    await loadData(true, preSessionRole === 'admin');
+  }catch(e){
+    logError('boot/loadData', e);
+    toast('Не удалось загрузить данные: ' + e.message, 5000);
+  }
+  if(savedSessionRaw && DATA){
     try{
       SESSION = JSON.parse(savedSessionRaw);
       const acc = DATA.accounts.find(a=>a.id===SESSION.accountId);
