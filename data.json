@@ -13,6 +13,14 @@
       "passHash": "c30cdb2108ec9ea7f036f15a9d6642fc2fa834f834207aa286cf024c0fcee631"
     }
   ],
-  "providers": [],
+  "providers": [
+    {
+      "id": "pr_1787912621833",
+      "name": "ЖКХ",
+      "logo": "🏠",
+      "color": "#22d3ee",
+      "logoUrl": null
+    }
+  ],
   "payments": []
 }
