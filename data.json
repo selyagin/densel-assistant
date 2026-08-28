@@ -27,6 +27,13 @@
       "logo": "🛜",
       "color": "#22d3ee",
       "logoUrl": null
+    },
+    {
+      "id": "pr_1787912672522",
+      "name": "Капитальный ремонт",
+      "logo": "🛠",
+      "color": "#22d3ee",
+      "logoUrl": null
     }
   ],
   "payments": []
