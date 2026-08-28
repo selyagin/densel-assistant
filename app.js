@@ -6,7 +6,7 @@
    GitHub Contents API с личным токеном, который хранится ТОЛЬКО в
    localStorage этого устройства. */
 
-const BUILD_ID = '2026-08-28.6-summary-buttons';
+const BUILD_ID = '2026-08-28.7-bulk-add';
 
 const LS_DATA = 'densel_data_cache';
 const LS_SESSION = 'densel_session';
@@ -902,6 +902,68 @@ function openAccountModal(){
   };
 }
 
+/* ---------- Bulk add payments for a month ---------- */
+function openBulkAddModal(){
+  const suggestedPeriod = addMonths(currentPeriod(), 1);
+  const rows = DATA.providers.map(pr=>{
+    const history = DATA.payments.filter(p=>p.providerId===pr.id).sort((a,b)=>b.period.localeCompare(a.period));
+    const last = history[0];
+    const suggestedAmount = last ? last.amountDue : '';
+    const suggestedDay = last && last.dueDate ? new Date(last.dueDate).getDate() : 25;
+    return {pr, suggestedAmount, suggestedDay};
+  });
+  openModal(`
+    <h3>Добавить оплаты на месяц</h3>
+    <form id="bulkForm" class="settings-form">
+      <label class="field"><span>Период</span><input type="month" id="bulk_period" value="${suggestedPeriod}" required></label>
+      <p class="muted small" style="margin:0;">Сумма подставлена по последнему известному платежу — при необходимости измените. Уберите галочку у поставщика, если платёж за этот месяц не нужен.</p>
+      <div class="bulk-list">
+        ${rows.map(r=>`
+          <label class="bulk-row">
+            <input type="checkbox" class="bulk-check" data-provider="${r.pr.id}" checked>
+            <span class="payment-logo bulk-logo" style="background:${r.pr.color}">${r.pr.logoUrl?`<img src="${r.pr.logoUrl}">`:(r.pr.logo||r.pr.name[0])}</span>
+            <span class="bulk-name">${r.pr.name}</span>
+            <input type="number" step="0.01" class="bulk-amount" data-provider="${r.pr.id}" value="${r.suggestedAmount}" placeholder="Сумма">
+            <input type="number" min="1" max="28" class="bulk-day" data-provider="${r.pr.id}" value="${r.suggestedDay}" title="День срока оплаты">
+          </label>
+        `).join('')}
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost full" id="bulk_cancel">Отмена</button>
+        <button type="submit" class="btn primary full">Добавить выбранные</button>
+      </div>
+    </form>
+  `);
+  $('#bulk_cancel').onclick = closeModal;
+  $('#bulkForm').onsubmit = async (e)=>{
+    e.preventDefault();
+    const period = $('#bulk_period').value;
+    const checks = $all('.bulk-check').filter(c=>c.checked);
+    if(checks.length===0){ toast('Выберите хотя бы одного поставщика'); return; }
+    let added = 0, skipped = 0;
+    checks.forEach(chk=>{
+      const providerId = chk.dataset.provider;
+      const exists = DATA.payments.some(p=>p.providerId===providerId && p.period===period);
+      if(exists){ skipped++; return; }
+      const amountInput = document.querySelector(`.bulk-amount[data-provider="${providerId}"]`);
+      const dayInput = document.querySelector(`.bulk-day[data-provider="${providerId}"]`);
+      const amount = parseFloat(amountInput.value) || 0;
+      const day = Math.min(28, Math.max(1, parseInt(dayInput.value,10) || 25));
+      const [y,m] = period.split('-').map(Number);
+      const dueDate = `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      DATA.payments.push({
+        id: 'p_' + Date.now() + '_' + providerId,
+        providerId, period, amountDue: amount, dueDate, amountPaid: 0, paidDate: null
+      });
+      added++;
+    });
+    closeModal();
+    if(added>0) await saveData(`Пакетное добавление платежей за ${periodLabel(period)}`);
+    renderAdminDashboard();
+    toast(`Добавлено платежей: ${added}` + (skipped ? `, пропущено (уже есть за этот период): ${skipped}` : ''));
+  };
+}
+
 /* ---------- Settings & password forms ---------- */
 $('#settingsForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
@@ -940,6 +1002,7 @@ $all('.tab').forEach(tab=>{
 });
 
 $('#addPaymentBtn').addEventListener('click', ()=>openPaymentModal(null));
+$('#bulkAddBtn').addEventListener('click', ()=>openBulkAddModal());
 $('#addProviderBtn').addEventListener('click', ()=>openProviderModal(null));
 $('#addAccountBtn').addEventListener('click', ()=>openAccountModal());
 
