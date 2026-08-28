@@ -44,5 +44,15 @@
       "logoUrl": null
     }
   ],
-  "payments": []
+  "payments": [
+    {
+      "id": "p_1787913096078",
+      "providerId": "pr_1787912621833",
+      "period": "2026-08",
+      "amountDue": 1,
+      "dueDate": "2026-08-28",
+      "amountPaid": 0,
+      "paidDate": "2026-08-28"
+    }
+  ]
 }
