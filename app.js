@@ -1,10 +1,12 @@
 /* ===================== Densel Assistant — core app logic ===================== */
-/* Полностью статичное клиентское приложение. "База данных" — файл data.json
-   в этом же репозитории. Чтение — обычным fetch (с обходом кэша), запись
-   (только для админа) — через GitHub Contents API с личным токеном, который
-   вводится в разделе "Настройки" и хранится ТОЛЬКО в localStorage устройства. */
+/* Полностью статичное клиентское приложение. У админа чтение идёт через api.github.com (без CDN,
+   всегда актуально), у клиента (сестры) — через публичный data.json на
+   GitHub Pages (может отставать на несколько минут — это ограничение CDN
+   самого GitHub Pages, не наш код). Запись — только для админа, через
+   GitHub Contents API с личным токеном, который хранится ТОЛЬКО в
+   localStorage этого устройства. */
 
-const BUILD_ID = '2026-08-28.3-diag';
+const BUILD_ID = '2026-08-28.4-api-read';
 
 const LS_DATA = 'densel_data_cache';
 const LS_SESSION = 'densel_session';
@@ -53,6 +55,12 @@ function utf8ToBase64(str){
   bytes.forEach(b => binary += String.fromCharCode(b));
   return btoa(binary);
 }
+function base64ToUtf8(b64){
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
 function fmtMoney(n){
   return (Math.round((n||0)*100)/100).toLocaleString('ru-RU', {maximumFractionDigits:2}) + ' ₽';
 }
@@ -84,7 +92,34 @@ function last12Periods(n){
 }
 
 /* ---------- Data load / save ---------- */
-async function loadData(showToastOnFallback){
+async function fetchDataViaApi(){
+  const {owner, repo, branch} = getGhSettings();
+  const token = getGhToken();
+  if(!owner || !repo || !token) return null;
+  try{
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data.json?ref=${branch||'main'}&_=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json'}
+    });
+    if(!res.ok) return null;
+    const json = await res.json();
+    const decoded = base64ToUtf8((json.content||'').replace(/\n/g,''));
+    return JSON.parse(decoded);
+  }catch(e){
+    logError('fetchDataViaApi', e);
+    return null;
+  }
+}
+
+async function loadData(showToastOnFallback, preferApi){
+  if(preferApi){
+    const apiData = await fetchDataViaApi();
+    if(apiData){
+      DATA = apiData;
+      localStorage.setItem(LS_DATA, JSON.stringify(DATA));
+      return true;
+    }
+  }
   try{
     const res = await fetch('./data.json?v=' + Date.now(), {cache:'no-store'});
     if(!res.ok) throw new Error('fetch failed: HTTP ' + res.status);
@@ -236,7 +271,8 @@ async function checkGithubToken(){
 async function forceSync(){
   toast('Обновляем данные…', 1500);
   try{
-    const fresh = await loadData(false);
+    const preferApi = !!(SESSION && SESSION.role === 'admin');
+    const fresh = await loadData(false, preferApi);
     if(SESSION){
       if(SESSION.role === 'admin') renderAdminDashboard();
       else renderClientDashboard();
@@ -571,7 +607,21 @@ async function collectDiagnosticsReport(){
   lines.push('syncStatus текст: ' + (syncEl ? syncEl.textContent : '—'));
   lines.push('');
 
-  lines.push('--- Живая проверка data.json на GitHub Pages ---');
+  lines.push('--- Живая проверка через api.github.com (без CDN) ---');
+  try{
+    const apiData = await fetchDataViaApi();
+    if(apiData){
+      lines.push('payments на сервере (api.github.com): ' + apiData.payments.length);
+      lines.push('accounts на сервере (api.github.com): ' + apiData.accounts.length);
+    }else{
+      lines.push('Не удалось прочитать через api.github.com (нет токена или ошибка)');
+    }
+  }catch(e){
+    lines.push('Ошибка запроса к api.github.com: ' + e.message);
+  }
+  lines.push('');
+
+  lines.push('--- Живая проверка data.json на GitHub Pages (через CDN, может отставать) ---');
   try{
     const res = await fetch('./data.json?diag=' + Date.now(), {cache:'no-store'});
     lines.push('HTTP статус: ' + res.status);
@@ -580,8 +630,8 @@ async function collectDiagnosticsReport(){
       lines.push('Размер ответа: ' + txt.length + ' символов');
       try{
         const parsed = JSON.parse(txt);
-        lines.push('payments в файле на сервере: ' + (parsed.payments ? parsed.payments.length : '—'));
-        lines.push('accounts в файле на сервере: ' + (parsed.accounts ? parsed.accounts.length : '—'));
+        lines.push('payments в файле (Pages CDN): ' + (parsed.payments ? parsed.payments.length : '—'));
+        lines.push('accounts в файле (Pages CDN): ' + (parsed.accounts ? parsed.accounts.length : '—'));
       }catch(e){ lines.push('Не удалось распарсить JSON: ' + e.message); }
     }
   }catch(e){
@@ -606,7 +656,8 @@ async function collectDiagnosticsReport(){
       for(const name of cacheNames){
         const cache = await caches.open(name);
         const keys = await cache.keys();
-        lines.push(`  ${name}: ${keys.length} файлов — ` + keys.map(k=>new URL(k.url).pathname).join(', '));
+        const uniquePaths = [...new Set(keys.map(k=>new URL(k.url).pathname))];
+        lines.push(`  ${name}: ${keys.length} записей, уникальных путей: ${uniquePaths.length} — ` + uniquePaths.join(', '));
       }
     }catch(e){ lines.push('Ошибка чтения Cache Storage: ' + e.message); }
   }else{
@@ -891,11 +942,15 @@ function enterApp(){
 
 /* ---------- Boot ---------- */
 async function boot(){
-  await loadData(true);
-  const savedSession = localStorage.getItem(LS_SESSION);
-  if(savedSession){
+  const savedSessionRaw = localStorage.getItem(LS_SESSION);
+  let preSessionRole = null;
+  if(savedSessionRaw){
+    try{ preSessionRole = JSON.parse(savedSessionRaw).role; }catch(e){}
+  }
+  await loadData(true, preSessionRole === 'admin');
+  if(savedSessionRaw){
     try{
-      SESSION = JSON.parse(savedSession);
+      SESSION = JSON.parse(savedSessionRaw);
       const acc = DATA.accounts.find(a=>a.id===SESSION.accountId);
       if(acc){ enterApp(); return; }
     }catch(e){}
