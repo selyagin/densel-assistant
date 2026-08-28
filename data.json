@@ -80,6 +80,24 @@
       "dueDate": "2026-11-20",
       "amountPaid": 500,
       "paidDate": "2026-08-28"
+    },
+    {
+      "id": "p_1787926546072_pr_1787912640521",
+      "providerId": "pr_1787912640521",
+      "period": "2026-08",
+      "amountDue": 500,
+      "dueDate": "2026-08-25",
+      "amountPaid": 0,
+      "paidDate": null
+    },
+    {
+      "id": "p_1787926546072_pr_1787912672522",
+      "providerId": "pr_1787912672522",
+      "period": "2026-08",
+      "amountDue": 942,
+      "dueDate": "2026-08-25",
+      "amountPaid": 0,
+      "paidDate": null
     }
   ]
 }
