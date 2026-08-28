@@ -11,14 +11,6 @@
       "name": "Администратор",
       "salt": "8d5cb365881b3590",
       "passHash": "c30cdb2108ec9ea7f036f15a9d6642fc2fa834f834207aa286cf024c0fcee631"
-    },
-    {
-      "id": "acc_sister",
-      "role": "client",
-      "login": "sister",
-      "name": "Сестра",
-      "salt": "f6c81330d13f1287",
-      "passHash": "ad70ec52704eda88a625ea5fa11f9853d786e784c3fe45a65330d9da5a69ebdd"
     }
   ],
   "providers": [
