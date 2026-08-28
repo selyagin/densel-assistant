@@ -1,4 +1,4 @@
-const CACHE = 'densel-assistant-v1';
+const CACHE = 'densel-assistant-v2';
 const ASSETS = [
   './',
   './index.html',
