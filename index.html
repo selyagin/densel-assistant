@@ -1,1 +1,221 @@
-__INDEX__
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Densel Assistant</title>
+<meta name="description" content="Densel Assistant — ваш помощник в оплате услуг">
+<meta name="theme-color" content="#0b1020">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./assets/icon-192.png">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<div class="bg-blobs" aria-hidden="true">
+  <div class="blob b1"></div>
+  <div class="blob b2"></div>
+  <div class="blob b3"></div>
+</div>
+
+<!-- ===================== LOGIN SCREEN ===================== -->
+<section id="loginScreen" class="screen login-screen active">
+  <div class="login-card glass fade-up">
+    <div class="brand">
+      <div class="brand-logo">D</div>
+      <div class="brand-text">
+        <h1>Densel Assistant</h1>
+        <p>Ваш помощник в оплате услуг</p>
+      </div>
+    </div>
+
+    <form id="loginForm" class="login-form" autocomplete="off">
+      <label class="field">
+        <span>Логин</span>
+        <input type="text" id="loginInput" autocomplete="username" required>
+      </label>
+      <label class="field">
+        <span>Пароль</span>
+        <input type="password" id="passwordInput" autocomplete="current-password" required>
+      </label>
+      <button type="submit" class="btn primary full">
+        <span>Войти</span>
+      </button>
+      <p id="loginError" class="error-text"></p>
+    </form>
+
+    <p class="login-hint">Доступ только для владельцев учётных записей Densel Assistant</p>
+  </div>
+</section>
+
+<!-- ===================== CLIENT DASHBOARD ===================== -->
+<section id="clientScreen" class="screen app-screen">
+  <header class="topbar glass">
+    <div class="topbar-brand">
+      <div class="brand-logo small">D</div>
+      <div>
+        <h2 id="clientGreeting">Здравствуйте</h2>
+        <span class="muted">Densel Assistant</span>
+      </div>
+    </div>
+    <button class="btn ghost small" id="clientLogoutBtn">Выйти</button>
+  </header>
+
+  <main class="content">
+    <section class="summary-grid" id="clientSummary"></section>
+
+    <section class="panel glass fade-up">
+      <div class="panel-head">
+        <h3>Платежи</h3>
+        <select id="periodFilter" class="select"></select>
+      </div>
+      <div id="paymentsList" class="payments-list"></div>
+    </section>
+
+    <section class="panel glass fade-up">
+      <div class="panel-head">
+        <h3>Статистика 📉</h3>
+        <select id="statsRange" class="select">
+          <option value="6">6 месяцев</option>
+          <option value="12" selected>12 месяцев</option>
+        </select>
+      </div>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h4>Начислено / оплачено</h4>
+          <svg id="trendChart" viewBox="0 0 320 160" class="trend-svg"></svg>
+          <div class="legend">
+            <span class="dot due"></span> Начислено
+            <span class="dot paid"></span> Оплачено
+          </div>
+        </div>
+        <div class="chart-card">
+          <h4>По поставщикам</h4>
+          <svg id="donutChart" viewBox="0 0 160 160" class="donut-svg"></svg>
+          <div id="donutLegend" class="legend column"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</section>
+
+<!-- ===================== ADMIN DASHBOARD ===================== -->
+<section id="adminScreen" class="screen app-screen">
+  <header class="topbar glass">
+    <div class="topbar-brand">
+      <div class="brand-logo small">D</div>
+      <div>
+        <h2>Densel Assistant · Админ</h2>
+        <span class="muted" id="syncStatus">не синхронизировано</span>
+      </div>
+    </div>
+    <button class="btn ghost small" id="adminLogoutBtn">Выйти</button>
+  </header>
+
+  <nav class="tabs glass">
+    <button class="tab active" data-tab="overview">Обзор</button>
+    <button class="tab" data-tab="payments">Платежи</button>
+    <button class="tab" data-tab="providers">Поставщики</button>
+    <button class="tab" data-tab="accounts">Учётные записи</button>
+    <button class="tab" data-tab="settings">Настройки</button>
+  </nav>
+
+  <main class="content">
+
+    <section class="tab-panel active" id="tab-overview">
+      <section class="summary-grid" id="adminSummary"></section>
+      <section class="panel glass fade-up">
+        <h3>Ближайшие сроки</h3>
+        <div id="upcomingList" class="payments-list"></div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-payments">
+      <section class="panel glass fade-up">
+        <div class="panel-head">
+          <h3>Управление платежами</h3>
+          <button class="btn primary small" id="addPaymentBtn">+ Добавить платёж</button>
+        </div>
+        <div id="adminPaymentsList" class="payments-list editable"></div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-providers">
+      <section class="panel glass fade-up">
+        <div class="panel-head">
+          <h3>Поставщики услуг</h3>
+          <button class="btn primary small" id="addProviderBtn">+ Добавить поставщика</button>
+        </div>
+        <div id="providersList" class="providers-list"></div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-accounts">
+      <section class="panel glass fade-up">
+        <div class="panel-head">
+          <h3>Учётные записи</h3>
+          <button class="btn primary small" id="addAccountBtn">+ Добавить учётку</button>
+        </div>
+        <div id="accountsList" class="accounts-list"></div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-settings">
+      <section class="panel glass fade-up">
+        <h3>Синхронизация с GitHub</h3>
+        <p class="muted small">
+          Изменения сохраняются напрямую в файл <code>data.json</code> вашего репозитория через GitHub API.
+          Нужен Personal Access Token (fine-grained) с доступом Contents: Read and write только к этому репозиторию.
+        </p>
+        <form id="settingsForm" class="settings-form">
+          <label class="field">
+            <span>GitHub логин (владелец репозитория)</span>
+            <input type="text" id="ghOwner" placeholder="selyagin">
+          </label>
+          <label class="field">
+            <span>Название репозитория</span>
+            <input type="text" id="ghRepo" placeholder="densel-assistant">
+          </label>
+          <label class="field">
+            <span>Ветка</span>
+            <input type="text" id="ghBranch" placeholder="main">
+          </label>
+          <label class="field">
+            <span>Personal Access Token</span>
+            <input type="password" id="ghToken" placeholder="github_pat_...">
+          </label>
+          <button type="submit" class="btn primary full">Сохранить настройки</button>
+          <p id="settingsMsg" class="hint-text"></p>
+        </form>
+      </section>
+
+      <section class="panel glass fade-up">
+        <h3>Сменить пароль</h3>
+        <form id="passwordForm" class="settings-form">
+          <label class="field">
+            <span>Учётная запись</span>
+            <select id="pwAccountSelect" class="select"></select>
+          </label>
+          <label class="field">
+            <span>Новый пароль</span>
+            <input type="password" id="pwNewInput" minlength="4">
+          </label>
+          <button type="submit" class="btn secondary full">Обновить пароль</button>
+          <p id="pwMsg" class="hint-text"></p>
+        </form>
+      </section>
+    </section>
+
+  </main>
+</section>
+
+<!-- ===================== MODAL ===================== -->
+<div id="modalOverlay" class="modal-overlay">
+  <div class="modal glass" id="modalBox"></div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="./app.js"></script>
+</body>
+</html>
