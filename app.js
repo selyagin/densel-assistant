@@ -4,7 +4,7 @@
    GitHub Pages (может отставать на несколько минут). Запись — только для
    админа, через GitHub Contents API с личным токеном в localStorage. */
 
-const BUILD_ID = '2026-08-28.9-bulk-52';
+const BUILD_ID = '2026-08-28.10-bulk-53';
 
 const LS_DATA = 'densel_data_cache';
 const LS_SESSION = 'densel_session';
@@ -518,7 +518,12 @@ function renderAdminPayments(){
   });
 }
 
-/* ---------- 5.1/5.2: bulk payments button + modal with provider checklist ---------- */
+/* ---------- 5.1/5.2/5.3: bulk payments button + modal with provider checklist + suggested amounts ---------- */
+function getLastAmountForProvider(providerId){
+  const list = DATA.payments.filter(p=>p.providerId===providerId).sort((a,b)=> b.period.localeCompare(a.period));
+  return list.length ? list[0].amountDue : '';
+}
+
 function ensureBulkPaymentsButton(){
   if($('#bulkPaymentsBtn')) return;
   const addBtn = $('#addPaymentBtn');
@@ -534,22 +539,26 @@ function ensureBulkPaymentsButton(){
 }
 
 function openBulkPaymentsModal(){
-  const providerRows = DATA.providers.map(pr => `
-    <label class="account-row" style="cursor:pointer;">
+  const providerRows = DATA.providers.map(pr => {
+    const suggested = getLastAmountForProvider(pr.id);
+    return `
+    <label class="account-row" style="cursor:pointer;flex-wrap:wrap;">
       <input type="checkbox" class="bulk-provider-check" data-provider-id="${pr.id}" checked style="width:18px;height:18px;flex:0 0 auto;">
       <div class="payment-logo" style="background:${pr.color}">${pr.logoUrl ? `<img src="${pr.logoUrl}">` : (pr.logo||pr.name[0])}</div>
-      <div class="payment-info"><h4>${pr.name}</h4></div>
+      <div class="payment-info"><h4>${pr.name}</h4>${suggested!=='' ? `<span class="muted">последняя сумма: ${fmtMoney(suggested)}</span>` : `<span class="muted">сумма не найдена — введите вручную</span>`}</div>
+      <input type="number" step="0.01" class="bulk-amount-input" data-provider-id="${pr.id}" value="${suggested}" placeholder="Сумма" style="width:100px;flex:0 0 auto;" onclick="event.stopPropagation()">
     </label>
-  `).join('');
+  `;
+  }).join('');
   openModal(`
     <h3>Добавить платежи на месяц</h3>
     <form id="bulkPaymentsForm" class="settings-form">
       <label class="field"><span>Период</span><input type="month" id="bulk_period" value="${currentPeriod()}" required></label>
-      <label class="field"><span>Поставщики для добавления</span></label>
+      <label class="field"><span>Поставщики и суммы</span></label>
       <div class="accounts-list">
         ${providerRows || '<p class="muted">Сначала добавьте хотя бы одного поставщика на вкладке «Поставщики»</p>'}
       </div>
-      <p class="muted small">Суммы и сроки оплаты для отмеченных поставщиков появятся на следующем шаге.</p>
+      <p class="muted small">Сумма подставлена по последнему платежу этого поставщика — можно изменить вручную. Сроки оплаты появятся на следующем шаге.</p>
       <div class="modal-actions">
         <button type="button" class="btn ghost full" id="bulk_cancel">Отмена</button>
       </div>
