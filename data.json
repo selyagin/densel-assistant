@@ -20,6 +20,13 @@
       "logo": "🏠",
       "color": "#22d3ee",
       "logoUrl": null
+    },
+    {
+      "id": "pr_1787912640521",
+      "name": "Интернет",
+      "logo": "🛜",
+      "color": "#22d3ee",
+      "logoUrl": null
     }
   ],
   "payments": []
