@@ -1,8 +1,8 @@
 {
   "current": {
     "period": "2026-08",
-    "status": "submitted",
-    "submittedAt": "2026-08-28",
+    "status": "not_submitted",
+    "submittedAt": null,
     "note": ""
   },
   "history": [
