@@ -106,31 +106,51 @@ async function saveData(commitMessage){
   const branchName = branch || 'main';
   const api = `https://api.github.com/repos/${owner}/${repo}/contents/data.json`;
   const syncEl = $('#syncStatus');
-  try{
-    if(syncEl) syncEl.textContent = 'сохранение…';
-    const getRes = await fetch(`${api}?ref=${branchName}`, {
+
+  async function fetchCurrentSha(){
+    const getRes = await fetch(`${api}?ref=${branchName}&_=${Date.now()}`, {
+      cache: 'no-store',
       headers: {Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json'}
     });
     if(getRes.status === 401) throw new Error('токен неверен или просрочен (401). создайте новый в разделе Настройки.');
-    if(getRes.status === 404) throw new Error('репозиторий/файл не найден (404). Спроверьте владельца, имя репозитория и ветку.');
-    let sha;
-    if(getRes.ok){ sha = (await getRes.json()).sha; }
+    if(getRes.status === 404) throw new Error('репозиторий/файл не найден (404). Проверьте владельца, имя репозитория и ветку.');
+    if(!getRes.ok) throw new Error(`не удалось прочитать текущую версию файла (HTTP ${getRes.status})`);
+    const json = await getRes.json();
+    return json.sha;
+  }
+
+  async function attemptPut(sha){
     const body = {
       message: commitMessage || 'Densel Assistant: обновление данных',
       content: utf8ToBase64(JSON.stringify(DATA, null, 2)),
       branch: branchName
     };
     if(sha) body.sha = sha;
-    const putRes = await fetch(api, {
+    return fetch(api, {
       method:'PUT',
+      cache: 'no-store',
       headers:{Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json', 'Content-Type':'application/json'},
       body: JSON.stringify(body)
     });
+  }
+
+  try{
+    if(syncEl) syncEl.textContent = 'сохранение…';
+    let sha = await fetchCurrentSha();
+    let putRes = await attemptPut(sha);
+
+    if(putRes.status === 409){
+      // конфликт версий (устаревший sha) — перечитываем актуальную версию и пробуем ещё раз один раз
+      sha = await fetchCurrentSha();
+      putRes = await attemptPut(sha);
+    }
+
     if(!putRes.ok){
       const err = await putRes.json().catch(()=>({}));
       if(putRes.status === 401) throw new Error('токен неверен или просрочен (401)');
       if(putRes.status === 403) throw new Error('нет прав на запись (403) — у токена должен быть доступ Contents: Read and write именно к этому репозиторию');
       if(putRes.status === 404) throw new Error('репозиторий или файл не найден (404) — проверьте владельца/название/ветку');
+      if(putRes.status === 409) throw new Error('конфликт версии файла — кто-то другой изменил данные одновременно. Попробуйте сохранить ещё раз.');
       if(putRes.status === 422) throw new Error('конфликт версии файла (422) — нажмите "Обновить данные" и повторите');
       throw new Error(err.message || `HTTP ${putRes.status}`);
     }
