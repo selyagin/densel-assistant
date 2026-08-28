@@ -46,15 +46,6 @@
   ],
   "payments": [
     {
-      "id": "p_1787926574318_pr_1787912672522",
-      "providerId": "pr_1787912672522",
-      "period": "2026-08",
-      "amountDue": 0,
-      "dueDate": "2026-08-25",
-      "amountPaid": 0,
-      "paidDate": null
-    },
-    {
       "id": "p_1787927047997_pr_1787912621833",
       "providerId": "pr_1787912621833",
       "period": "2026-07",
