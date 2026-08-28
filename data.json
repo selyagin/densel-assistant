@@ -11,6 +11,14 @@
       "name": "Администратор",
       "salt": "8d5cb365881b3590",
       "passHash": "c30cdb2108ec9ea7f036f15a9d6642fc2fa834f834207aa286cf024c0fcee631"
+    },
+    {
+      "id": "acc_1787912847714",
+      "role": "client",
+      "login": "Nehochyplatit",
+      "name": "Татьяна",
+      "salt": "20712f56f2955de9",
+      "passHash": "4916e3002594bbfcd2d9d7bc6bdf9f65884a170bb9228a9f71a708c4ddcb6f3f"
     }
   ],
   "providers": [
