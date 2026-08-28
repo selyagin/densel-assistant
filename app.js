@@ -1,8 +1,8 @@
 /* ===================== Densel Assistant — core app logic ===================== */
 /* Полностью статичное клиентское приложение. "База данных" — файл data.json
-   в этом же репозитории. Чтение — обычным fetch, запись (только для админа) —
-   через GitHub Contents API с личным токеном, который вводится в разделе "Настройки"
-   и хранится ТОЛЬКО в localStorage этого устройства. */
+   в этом же репозитории. Чтение — обычным fetch (с обходом кэша), запись
+   (только для админа) — через GitHub Contents API с личным токеном, который
+   вводится в разделе "Настройки" и хранится ТОЛЬКО в localStorage устройства. */
 
 const LS_DATA = 'densel_data_cache';
 const LS_SESSION = 'densel_session';
@@ -17,7 +17,7 @@ let CURRENT_TAB = 'overview';
 function $(sel, root=document){ return root.querySelector(sel); }
 function $all(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
 
-function toast(msg, ms=2600){
+function toast(msg, ms=3200){
   const el = $('#toast');
   el.textContent = msg;
   el.classList.add('show');
@@ -71,17 +71,19 @@ function last12Periods(n){
 }
 
 /* ---------- Data load / save ---------- */
-async function loadData(){
+async function loadData(showToastOnFallback){
   try{
-    const res = await fetch('./data.json', {cache:'no-store'});
-    if(!res.ok) throw new Error('fetch failed');
+    const res = await fetch('./data.json?v=' + Date.now(), {cache:'no-store'});
+    if(!res.ok) throw new Error('fetch failed: HTTP ' + res.status);
     DATA = await res.json();
     localStorage.setItem(LS_DATA, JSON.stringify(DATA));
+    return true;
   }catch(e){
     const cached = localStorage.getItem(LS_DATA);
     if(cached){
       DATA = JSON.parse(cached);
-      toast('Не удалось загрузить свежие данные — показан сохранённый кэш');
+      if(showToastOnFallback) toast('Не удалось загрузить свежие данные — показан сохранённый кэш');
+      return false;
     }else{
       throw e;
     }
@@ -98,7 +100,7 @@ async function saveData(commitMessage){
   const {owner, repo, branch} = getGhSettings();
   const token = getGhToken();
   if(!owner || !repo || !token){
-    toast('Данные сохранены локально. Настройте GitHub в разделе "Настройки", чтобы синхронизировать.');
+    toast('Данные сохранены только локально. заполните GitHub в разделе "Настройки", чтобы синхронизировать с сестрой.');
     return false;
   }
   const branchName = branch || 'main';
@@ -109,6 +111,8 @@ async function saveData(commitMessage){
     const getRes = await fetch(`${api}?ref=${branchName}`, {
       headers: {Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json'}
     });
+    if(getRes.status === 401) throw new Error('токен неверен или просрочен (401). создайте новый в разделе Настройки.');
+    if(getRes.status === 404) throw new Error('репозиторий/файл не найден (404). Спроверьте владельца, имя репозитория и ветку.');
     let sha;
     if(getRes.ok){ sha = (await getRes.json()).sha; }
     const body = {
@@ -124,6 +128,10 @@ async function saveData(commitMessage){
     });
     if(!putRes.ok){
       const err = await putRes.json().catch(()=>({}));
+      if(putRes.status === 401) throw new Error('токен неверен или просрочен (401)');
+      if(putRes.status === 403) throw new Error('нет прав на запись (403) — у токена должен быть доступ Contents: Read and write именно к этому репозиторию');
+      if(putRes.status === 404) throw new Error('репозиторий или файл не найден (404) — проверьте владельца/название/ветку');
+      if(putRes.status === 422) throw new Error('конфликт версии файла (422) — нажмите "Обновить данные" и повторите');
       throw new Error(err.message || `HTTP ${putRes.status}`);
     }
     if(syncEl) syncEl.textContent = `сохранено ${new Date().toLocaleTimeString('ru-RU')}`;
@@ -131,8 +139,77 @@ async function saveData(commitMessage){
     return true;
   }catch(e){
     if(syncEl) syncEl.textContent = 'ошибка синхронизации';
-    toast('Ошибка сохранения в GitHub: ' + e.message);
+    toast('Ошибка сохранения в GitHub: ' + e.message, 5000);
     return false;
+  }
+}
+
+async function checkGithubToken(){
+  const {owner, repo, branch} = getGhSettings();
+  const token = getGhToken();
+  const resultEl = $('#tokenCheckResult');
+  if(!resultEl) return;
+  if(!owner || !repo || !token){
+    resultEl.textContent = 'Заполните владельца, репозиторий и токен, затем сохраните настройки.';
+    resultEl.className = 'hint-text error-text';
+    return;
+  }
+  resultEl.textContent = 'Проверяю…';
+  resultEl.className = 'hint-text';
+  try{
+    const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers: {Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json'}
+    });
+    if(repoRes.status === 401){
+      resultEl.textContent = '❌ токен неверен или просрочен. создайте новый в GitHub → Settings → Developer settings → Personal access tokens.';
+      resultEl.className = 'hint-text error-text';
+      return;
+    }
+    if(repoRes.status === 404){
+      resultEl.textContent = '❌ репозиторий не найден или у токена нет доступа. Проверьте владельца/название и то, что в токене выбран именно этот репозиторий.';
+      resultEl.className = 'hint-text error-text';
+      return;
+    }
+    if(!repoRes.ok){
+      resultEl.textContent = `❌ Ошибка GitHub API: HTTP ${repoRes.status}`;
+      resultEl.className = 'hint-text error-text';
+      return;
+    }
+    const repoInfo = await repoRes.json();
+    const perms = repoInfo.permissions || {};
+    const fileRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data.json?ref=${branch||'main'}`, {
+      headers: {Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json'}
+    });
+    if(!perms.push){
+      resultEl.textContent = '⚠️ токен подключен, но нет права записи (push). Пересоздайте токен: Repository access → Only select repositories → densel-assistant, Permissions → Contents → Read and write.';
+      resultEl.className = 'hint-text error-text';
+      return;
+    }
+    if(!fileRes.ok){
+      resultEl.textContent = `⚠️ доступ к репозиторию есть, но файл data.json не найден по ветке "${branch||'main'}" (HTTP ${fileRes.status}). Проверьте имя ветки.`;
+      resultEl.className = 'hint-text error-text';
+      return;
+    }
+    resultEl.textContent = `✅ токен работает, есть доступ на запись к ${owner}/${repo} (${branch||'main'}). Можно сохранять изменения.`;
+    resultEl.className = 'hint-text';
+  }catch(e){
+    resultEl.textContent = '❌ Не удалось связаться с GitHub API: ' + e.message;
+    resultEl.className = 'hint-text error-text';
+  }
+}
+
+/* ---------- Force sync (manual refresh) ---------- */
+async function forceSync(){
+  toast('Обновляем данные…', 1500);
+  try{
+    const fresh = await loadData(false);
+    if(SESSION){
+      if(SESSION.role === 'admin') renderAdminDashboard();
+      else renderClientDashboard();
+    }
+    toast(fresh ? 'Данные обновлены ✓' : 'Показаны сохраненные ранее данные (нет соединения)');
+  }catch(e){
+    toast('Не удалось обновить данные: ' + e.message, 4000);
   }
 }
 
@@ -284,7 +361,6 @@ function renderClientDashboard(){
   $('#clientGreeting').textContent = `Здравствуйте, ${account.name || account.login}`;
 
   const payments = DATA.payments.slice().sort((a,b)=> b.period.localeCompare(a.period));
-  $('#adminSummary'); // noop guard
   $('#clientSummary').innerHTML = buildSummary(payments);
 
   const periods = Array.from(new Set(payments.map(p=>p.period))).sort().reverse();
@@ -416,6 +492,8 @@ function loadSettingsForm(){
   $('#ghRepo').value = s.repo || '';
   $('#ghBranch').value = s.branch || 'main';
   $('#ghToken').value = getGhToken();
+  const resultEl = $('#tokenCheckResult');
+  if(resultEl){ resultEl.textContent = ''; resultEl.className = 'hint-text'; }
 }
 
 /* ---------- Modals ---------- */
@@ -551,6 +629,8 @@ $('#settingsForm').addEventListener('submit', async (e)=>{
   toast('Настройки GitHub сохранены');
 });
 
+$('#checkTokenBtn').addEventListener('click', checkGithubToken);
+
 $('#passwordForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const accId = $('#pwAccountSelect').value;
@@ -579,6 +659,10 @@ $all('.tab').forEach(tab=>{
 $('#addPaymentBtn').addEventListener('click', ()=>openPaymentModal(null));
 $('#addProviderBtn').addEventListener('click', ()=>openProviderModal(null));
 $('#addAccountBtn').addEventListener('click', ()=>openAccountModal());
+
+/* ---------- Manual sync buttons ---------- */
+$('#clientSyncBtn').addEventListener('click', forceSync);
+$('#adminSyncBtn').addEventListener('click', forceSync);
 
 /* ---------- Auth ---------- */
 function showScreen(id){
@@ -622,7 +706,7 @@ function enterApp(){
 
 /* ---------- Boot ---------- */
 async function boot(){
-  await loadData();
+  await loadData(true);
   const savedSession = localStorage.getItem(LS_SESSION);
   if(savedSession){
     try{
