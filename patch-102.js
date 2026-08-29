@@ -21,6 +21,6 @@
     card.style.borderColor=hasOverdue?'#f16d64':total>0?'#22d3ee':'rgba(128,128,128,.35)'; card.style.cursor='pointer'; card.setAttribute('aria-label',total===0?'К оплате: всё оплачено':'Открыть неоплаченные начисления');
   }
   document.addEventListener('click',e=>{if(!e.target.closest?.('#clientSummary [data-summary-action="due-this-month"]'))return;e.preventDefault();e.stopImmediatePropagation();openUnpaid();},true);
-  [100,500,1200,2500].forEach(ms=>setTimeout(refreshCard,ms)); document.addEventListener('click',()=>setTimeout(refreshCard,80),true); document.addEventListener('change',()=>setTimeout(refreshCard,80),true);
+  [100,500,1200,2500].forEach(ms=>setTimeout(refreshCard,ms));
   window.DenselDueCard={refreshCard,openUnpaid};
 })();
