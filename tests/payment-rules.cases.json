@@ -1,0 +1,11 @@
+{
+  "referenceDate": "2026-08-29",
+  "cases": [
+    {"name":"Будущий неоплаченный платёж","payment":{"amountDue":1450,"amountPaid":0,"period":"2026-09","dueDate":"2026-09-12","paidDate":null},"expectedStatus":"planned","expectedBalance":1450,"inHistory":false},
+    {"name":"Будущий оплаченный заранее","payment":{"amountDue":1450,"amountPaid":1450,"period":"2026-09","dueDate":"2026-09-12","paidDate":"2026-08-29"},"expectedStatus":"paid_early","expectedBalance":0,"inHistory":true},
+    {"name":"Полная оплата текущего периода","payment":{"amountDue":1450,"amountPaid":1450,"period":"2026-08","dueDate":"2026-08-12","paidDate":"2026-08-12"},"expectedStatus":"paid","expectedBalance":0,"inHistory":true},
+    {"name":"Частичная оплата","payment":{"amountDue":2000,"amountPaid":500,"period":"2026-08","dueDate":"2026-09-05","paidDate":"2026-08-29"},"expectedStatus":"partial","expectedBalance":1500,"inHistory":true},
+    {"name":"Начисление к оплате","payment":{"amountDue":2000,"amountPaid":0,"period":"2026-08","dueDate":"2026-09-05","paidDate":null},"expectedStatus":"due","expectedBalance":2000,"inHistory":true},
+    {"name":"Просроченное начисление","payment":{"amountDue":2000,"amountPaid":0,"period":"2026-08","dueDate":"2026-08-28","paidDate":null},"expectedStatus":"overdue","expectedBalance":2000,"inHistory":true}
+  ]
+}
