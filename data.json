@@ -98,6 +98,15 @@
       "dueDate": "2026-09-12",
       "amountPaid": 0,
       "paidDate": "2026-09-12"
+    },
+    {
+      "id": "p_1787985499353",
+      "providerId": "pr_1787912672522",
+      "period": "2026-06",
+      "amountDue": 1334.57,
+      "dueDate": "2026-08-29",
+      "amountPaid": 1334.57,
+      "paidDate": "2026-08-29"
     }
   ]
 }
